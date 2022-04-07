@@ -1,0 +1,38 @@
+
+
+
+uploadArchives {
+    repositories.mavenDeployer {
+//        if (project.hasProperty("release") && (project.property("release") == "true")) {
+        repository(url: "http://nexus.corp.youdao.com/nexus/content/repositories/luna-android-release/") {
+            authentication(userName: "keupload", password: "100200300")
+        }
+//        } else {
+//            repository(url: project.GITHUB_REPO_SNAPSHOT_PATH) {
+//                authentication(userName: "keupload", password: "100200300")
+//            }
+//        }
+        pom.project {
+            groupId rootProject.ext.GROUP
+            artifactId project.name
+            version rootProject.ext.VERSION_NAME
+        }
+//        pom.whenConfigured {
+//            p ->
+//                p.dependencies = p.dependencies.findAll {
+//                    dep -> dep.groupId == ""
+//                }
+//        }
+    }
+}
+
+//以下代码会生成 jar 包源文件，如果是不开源码，请不要输入这段
+//aar包内包含注释
+//task androidSourcesJar(type: Jar) {
+//    classifier = 'sources'
+//    from android.sourceSets.main.java.sourceFiles
+//}
+
+//artifacts {
+//    archives androidSourcesJar
+//}

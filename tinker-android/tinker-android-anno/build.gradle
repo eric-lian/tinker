@@ -7,7 +7,8 @@ group rootProject.ext.GROUP
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation project(':tinker-android:tinker-android-anno-support')
+//    implementation project(':tinker-android:tinker-android-anno-support')
+    implementation ("${rootProject.ext.GROUP}:tinker-android-anno-support:${rootProject.ext.VERSION_NAME}")
 }
 
 sourceSets {
@@ -36,3 +37,6 @@ task buildTinkerSdk(type: Copy, dependsOn: [build]) {
 }
 
 apply from: rootProject.file('gradle/PublishArtifact.gradle')
+
+apply plugin: 'maven'
+apply from: '../../server_upload.gradle'

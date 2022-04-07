@@ -19,3 +19,7 @@ task buildTinkerSdk(type: Copy, dependsOn: [build]) {
 }
 
 apply from: rootProject.file('gradle/PublishArtifact.gradle')
+
+
+apply plugin: 'maven'
+apply from: '../../server_upload.gradle'

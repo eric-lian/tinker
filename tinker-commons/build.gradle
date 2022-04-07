@@ -10,9 +10,12 @@ targetCompatibility = rootProject.ext.javaVersion
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
-    api project(':third-party:aosp-dexutils')
-    api project(':third-party:bsdiff-util')
-    api project(':third-party:tinker-ziputils')
+//    api project(':third-party:aosp-dexutils')
+//    api project(':third-party:bsdiff-util')
+//    api project(':third-party:tinker-ziputils')
+    api("${rootProject.ext.GROUP}:aosp-dexutils:${rootProject.ext.VERSION_NAME}")
+    api("${rootProject.ext.GROUP}:bsdiff-util:${rootProject.ext.VERSION_NAME}")
+    api("${rootProject.ext.GROUP}:tinker-ziputils:${rootProject.ext.VERSION_NAME}")
 }
 
 task buildTinkerSdk(type: Copy, dependsOn: [build]) {
@@ -26,3 +29,7 @@ task buildTinkerSdk(type: Copy, dependsOn: [build]) {
 }
 
 apply from: rootProject.file('gradle/PublishArtifact.gradle')
+
+
+apply plugin: 'maven'
+apply from: '../server_upload.gradle'
