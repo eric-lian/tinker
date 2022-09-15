@@ -32,6 +32,7 @@ import android.os.RemoteException;
 import android.os.ResultReceiver;
 import android.os.SystemClock;
 
+import com.tencent.tinker.loader.app.TinkerApplication;
 import com.tencent.tinker.loader.shareutil.ShareFileLockHelper;
 import com.tencent.tinker.loader.shareutil.SharePatchFileUtil;
 import com.tencent.tinker.loader.shareutil.ShareReflectUtil;
@@ -157,6 +158,20 @@ public final class TinkerDexOptimizer {
                 if (!ShareTinkerInternals.isArkHotRuning()) {
                     if (useInterpretMode) {
                         interpretDex2Oat(dexFile.getAbsolutePath(), optimizedPath, targetISA);
+                    } else if (TinkerApplication.getInstance().isUseInterpretModeOnSupported32BitSystem() &&
+                            ShareTinkerInternals.isVersionInRange(21, 25, true) &&
+                            ShareTinkerInternals.is32BitEnv()
+                    ) {
+                        try {
+                            ShareTinkerLog.i(TAG, "dexopt with interpret mode on 32bit supported system was enabled.");
+                            interpretDex2Oat(dexFile.getAbsolutePath(), optimizedPath, targetISA);
+                        } catch (Throwable thr) {
+                            ShareTinkerLog.printErrStackTrace(TAG, thr, "exception occurred on dexopt triggering.");
+                        }
+                        if (!SharePatchFileUtil.isLegalFile(new File(optimizedPath))) {
+                            ShareTinkerLog.w(TAG, "interpret dexopt failure, compensate with system method.");
+                            DexFile.loadDex(dexFile.getAbsolutePath(), optimizedPath, 0);
+                        }
                     } else if (ShareTinkerInternals.isNewerOrEqualThanVersion(26, true)) {
                         if (ShareTinkerInternals.isNewerOrEqualThanVersion(29, true)) {
                             createFakeODexPathStructureOnDemand(optimizedPath);
@@ -181,8 +196,7 @@ public final class TinkerDexOptimizer {
                     }
                 }
                 final File odexFile = new File(optimizedPath);
-                if (SharePatchFileUtil.isLegalFile(odexFile)
-                        || ShareTinkerInternals.isNewerOrEqualThanVersion(29, true)) {
+                if (SharePatchFileUtil.isLegalFile(odexFile) || SharePatchFileUtil.shouldAcceptEvenIfIllegal(odexFile)) {
                     if (callback != null) {
                         callback.onSuccess(dexFile, optimizedDir, odexFile);
                     }
@@ -241,58 +255,65 @@ public final class TinkerDexOptimizer {
             ShareTinkerLog.i(TAG, "[+] Oat file %s should be valid, skip triggering dexopt.", oatPath);
             return;
         }
-        for (int i = 0; i < 5; ++i) {
-            if (ShareTinkerInternals.isNewerOrEqualThanVersion(31, true)) {
-                try {
-                    registerDexModule(context, dexPath);
-                    if (SharePatchFileUtil.isLegalFile(oatFile)) {
-                        break;
-                    }
-                } catch (Throwable thr) {
-                    ShareTinkerLog.printErrStackTrace(TAG, thr, "[-] Error.");
-                }
+
+        final File dexFile = new File(dexPath);
+        for (int i = 0; i < 10; ++i) {
+            if (triggerSecondaryDexOpt(context, dexFile, oatFile, true)) {
+                return;
             }
-            try {
-                performDexOptSecondary(context);
-                if (SharePatchFileUtil.isLegalFile(oatFile)) {
-                    break;
-                }
-            } catch (Throwable thr) {
-                ShareTinkerLog.printErrStackTrace(TAG, thr, "[-] Error.");
-            }
-            SystemClock.sleep(1000);
-            try {
-                performBgDexOptJob(context);
-                if (SharePatchFileUtil.isLegalFile(oatFile)) {
-                    break;
-                }
-            } catch (Throwable thr) {
-                ShareTinkerLog.printErrStackTrace(TAG, thr, "[-] Error.");
-            }
-            SystemClock.sleep(1000);
-            try {
-                performDexOptSecondaryByTransactionCode(context);
-                if (SharePatchFileUtil.isLegalFile(oatFile)) {
-                    break;
-                }
-            } catch (Throwable thr) {
-                ShareTinkerLog.printErrStackTrace(TAG, thr, "[-] Error.");
-            }
-            SystemClock.sleep(1000);
-            if ("huawei".equalsIgnoreCase(Build.MANUFACTURER) || "honor".equalsIgnoreCase(Build.MANUFACTURER)) {
-                try {
-                    registerDexModule(context, dexPath);
-                    if (SharePatchFileUtil.isLegalFile(oatFile)) {
-                        break;
-                    }
-                } catch (Throwable thr) {
-                    ShareTinkerLog.printErrStackTrace(TAG, thr, "[-] Error.");
-                }
-            }
-            SystemClock.sleep(3000);
         }
+
         if (!SharePatchFileUtil.isLegalFile(oatFile)) {
-            throw new IllegalStateException("No odex file was generated after calling performDexOptSecondary");
+            if ("huawei".equalsIgnoreCase(Build.MANUFACTURER) || "honor".equalsIgnoreCase(Build.MANUFACTURER)) {
+                for (int i = 0; i < 5; ++i) {
+                    try {
+                        registerDexModule(context, dexPath);
+                        if (SharePatchFileUtil.isLegalFile(oatFile)) {
+                            break;
+                        }
+                    } catch (Throwable thr) {
+                        ShareTinkerLog.printErrStackTrace(TAG, thr, "[-] Error.");
+                    }
+                    SystemClock.sleep(3000);
+                }
+                if (!SharePatchFileUtil.isLegalFile(oatFile)) {
+                    throw new IllegalStateException("No odex file was generated after calling registerDexModule");
+                }
+            } else {
+                throw new IllegalStateException("No odex file was generated after calling performDexOptSecondary");
+            }
+        }
+    }
+
+    private static boolean triggerSecondaryDexOpt(Context context, File dexFile, File oatFile, boolean waitForOAT) {
+        try {
+            performDexOptSecondary(context);
+            if (SharePatchFileUtil.isLegalFile(oatFile)) {
+                return true;
+            }
+        } catch (Throwable thr) {
+            ShareTinkerLog.printErrStackTrace(TAG, thr, "[-] Error.");
+        }
+        try {
+            performBgDexOptJob(context);
+            if (SharePatchFileUtil.isLegalFile(oatFile)) {
+                return true;
+            }
+        } catch (Throwable thr) {
+            ShareTinkerLog.printErrStackTrace(TAG, thr, "[-] Error.");
+        }
+        try {
+            performDexOptSecondaryByTransactionCode(context);
+            if (SharePatchFileUtil.isLegalFile(oatFile)) {
+                return true;
+            }
+        } catch (Throwable thr) {
+            ShareTinkerLog.printErrStackTrace(TAG, thr, "[-] Error.");
+        }
+        if (waitForOAT) {
+            return waitUntilFileGeneratedOrTimeout(context, oatFile.getAbsolutePath(), 3000L);
+        } else {
+            return SharePatchFileUtil.isLegalFile(oatFile);
         }
     }
 
@@ -518,18 +539,21 @@ public final class TinkerDexOptimizer {
         }
     }
 
-    private static void waitUntilFileGeneratedOrTimeout(Context context, String filePath) {
+    private static boolean waitUntilFileGeneratedOrTimeout(Context context, String filePath, Long... timeOutSeq) {
         final File file = new File(filePath);
-        final long[] delaySeq = {1000, 2000, 4000, 8000, 16000, 32000};
+        final Long[] delaySeq = (timeOutSeq != null && timeOutSeq.length > 0)
+                ? timeOutSeq : new Long[] {1000L, 2000L, 4000L, 8000L, 16000L, 32000L};
         int delaySeqIdx = 0;
-        while (!file.exists() && delaySeqIdx < delaySeq.length) {
+        while (!SharePatchFileUtil.isLegalFile(file) && delaySeqIdx < delaySeq.length) {
             SystemClock.sleep(delaySeq[delaySeqIdx++]);
             ShareTinkerLog.w(TAG, "[!] File %s does not exist after waiting %s time(s), wait again.", filePath, delaySeqIdx);
         }
-        if (file.exists()) {
+        if (SharePatchFileUtil.isLegalFile(file)) {
             ShareTinkerLog.i(TAG, "[+] File %s was found.", filePath);
+            return true;
         } else {
             ShareTinkerLog.e(TAG, "[-] File %s does not exist after waiting for %s times.", filePath, delaySeq.length);
+            return false;
         }
     }
 
