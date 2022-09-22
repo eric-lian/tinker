@@ -22,6 +22,8 @@ import com.tencent.tinker.build.util.FileOperation
 import org.gradle.api.Action
 import org.gradle.api.GradleException
 import org.gradle.api.Task
+import proguard.gradle.plugin.android.ProGuardTransform
+import proguard.gradle.plugin.android.dsl.ProGuardAndroidExtension
 
 /**
  * The configuration properties.
@@ -134,6 +136,7 @@ class TinkerProguardConfigAction implements Action<Task> {
                 configurationFilesField = null
             }
         }
+
         def agpConfigurationFiles = null
         boolean isOK = false
         if (configurationFilesOwner != null && configurationFilesField != null) {
@@ -144,6 +147,7 @@ class TinkerProguardConfigAction implements Action<Task> {
                 isOK = false
             }
         }
+
         if (isOK) {
             def mergedConfigurationFiles = project.files(agpConfigurationFiles, project.files(file))
             try {
@@ -154,6 +158,22 @@ class TinkerProguardConfigAction implements Action<Task> {
                 isOK = false
             }
         }
+        // proguard-gradle 适配插入自定义混淆文件
+        if (!isOK) {
+            try {
+                ProGuardTransform proGuardTransform = agpObfuscateTask.transform
+                def proguardBlockDeclaredField = Compatibilities.getFieldRecursively(proGuardTransform.class, 'proguardBlock')
+                ProGuardAndroidExtension proGuardAndroidExtension = proguardBlockDeclaredField.get(proGuardTransform)
+                def variantName = applicationVariant.name
+                def variantConfiguration = proGuardAndroidExtension.configurations.findByName(variantName)
+                variantConfiguration.configuration(file.absolutePath)
+                println "proguard-gradle : Now proguard rule files are: ${variantConfiguration.configurations}"
+                isOK = true
+            } catch (Throwable ignore) {
+                ignore.printStackTrace()
+            }
+        }
+
         if (!isOK) {
             throw new GradleException('Fail to inject tinker proguard rules file. Some compatibility works need to be done.')
         }

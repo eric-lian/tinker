@@ -25,7 +25,6 @@ import com.tencent.tinker.build.util.Utils
 import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
-import org.gradle.api.Task
 import org.gradle.api.file.FileCollection
 import sun.misc.Unsafe
 
@@ -195,6 +194,17 @@ class TinkerPatchPlugin implements Plugin<Project> {
                 // Add this proguard settings file to the list
                 boolean proguardEnable = variant.getBuildType().buildType.minifyEnabled
 
+                if (!proguardEnable) {
+                    try {
+                        // 匹配当前变体是否配置了proguard gradle 混淆配置
+                        def variantConfiguration = project.getExtensions().findByName("proguard").configurations.find {
+                            it.name == variantName
+                        }
+                        proguardEnable = variantConfiguration != null
+                    } catch (Throwable ignore) {
+                        ignore.printStackTrace()
+                    }
+                }
                 if (proguardEnable) {
                     def obfuscateTask = Compatibilities.getObfuscateTask(project, variant)
                     obfuscateTask.doFirst new TinkerProguardConfigAction(variant)

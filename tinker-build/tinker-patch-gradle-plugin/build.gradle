@@ -13,6 +13,7 @@ dependencies {
     implementation 'com.google.gradle:osdetector-gradle-plugin:1.6.0'
     implementation 'commons-codec:commons-codec:1.10'
     compileOnly 'com.android.tools.build:gradle:4.2.0'
+    compileOnly 'com.guardsquare:proguard-gradle:7.2.2'
 }
 
 repositories {

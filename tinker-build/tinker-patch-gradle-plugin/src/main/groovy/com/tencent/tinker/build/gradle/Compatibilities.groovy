@@ -115,6 +115,12 @@ class Compatibilities {
     static def getObfuscateTask(project, variant) {
         def capitalizedVariantName = variant.name.capitalize()
 
+        // proguard-gradle
+        def proguardGradleTask = project.tasks.findByName("transformClassesAndResourcesWithProguardTransformFor${capitalizedVariantName}")
+        if (proguardGradleTask != null && proguardGradleTask.enabled){
+            return proguardGradleTask
+        }
+
         // For WeChat internal build tools.
         def customProguardTransformTask = project.tasks.findByName("transformClassesWithCustomProguardFor${capitalizedVariantName}")
         if (customProguardTransformTask != null && customProguardTransformTask.enabled) {
